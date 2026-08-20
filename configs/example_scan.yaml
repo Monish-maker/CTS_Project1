@@ -1,0 +1,14 @@
+target:
+  url: "http://127.0.0.1:8000"
+
+scan:
+  timeout: 10
+  retries: 2
+  dry_run: true
+  max_iterations: 5
+
+attacks:
+  enabled: []
+
+reporting:
+  output_directory: "./reports"

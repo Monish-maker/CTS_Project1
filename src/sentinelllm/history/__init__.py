@@ -1,0 +1,1 @@
+"""Scan lifecycle persistence contracts."""
