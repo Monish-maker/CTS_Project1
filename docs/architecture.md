@@ -1,23 +1,25 @@
-# SentinelLLM Architecture: Phase 1
+# SentinelLLM Architecture
 
 ## Scope
 
-Phase 1 establishes contracts and composition only. It does not communicate with targets,
-discover capabilities, generate payloads, execute attacks, judge security outcomes, verify
-findings, or create reports. Default production components raise
-`FeatureNotImplementedError` whenever that unimplemented behavior is invoked.
+The implementation preserves the component flow in the repository architecture image. Network
+communication belongs exclusively to `TargetConnector`; planning and the adaptive Agent do not
+send requests. Every proposed job crosses `AttackPolicy` before execution.
 
 ## Data flow
 
 ```text
 CLI -> ScanOrchestrator -> TargetConnector -> DiscoveryAgent -> TargetProfile
     -> AttackPlanner -> AttackPlan -> AttackAgent -> AttackJob -> AttackExecutor
-    -> AttackResult -> AttackJudge -> VerificationComponent / FinalEvaluator
-    -> HistoryStore -> ReportGenerator
+    -> AttackResult -> Response Analysis -> AttackJudge -> Hypothesis Update
+    -> Adaptation Decision -> next AttackJob / Verification -> Complete Scan History
+    -> FinalEvaluator -> Security Report + Adaptive Attack Report
 ```
 
-In Phase 1 the orchestrator stops after it asks `HistoryStore` to create a `PENDING`
-`ScanHistory`. This verifies dependency composition without causing target traffic.
+`ScanOrchestrator.start` intentionally remains a no-traffic pending-scan operation for dry runs.
+`ScanOrchestrator.run` executes the complete bounded workflow. Every iteration is persisted as
+structured jobs, results, observations, evidence, judgments, hypotheses, policy decisions, and
+adaptation decisions before the next job is selected.
 
 ## Responsibilities and contracts
 
@@ -26,17 +28,22 @@ In Phase 1 the orchestrator stops after it asks `HistoryStore` to create a `PEND
 | Target connector | `TargetConnector`       | Async authorized target transport returning `TargetResponse`. |
 | Discovery        | `DiscoveryAgent`        | Produces a `TargetProfile` from permitted target information. |
 | Planning         | `AttackPlanner`         | Produces structured `AttackPlan` values.                      |
-| Attack agent     | `AttackAgent`           | Converts approved plans to `AttackJob` values.                |
+| Attack agent     | `AttackAgent`           | Selects response-driven strategies and creates `AttackJob`s.  |
 | Execution        | `AttackExecutor`        | Executes a job and returns raw `AttackResult` evidence.       |
 | Judging          | `AttackJudge`           | Produces a bounded `JudgeResult`.                             |
-| Verification     | `VerificationComponent` | Re-tests a potential `Finding`.                               |
+| Verification     | `VerificationComponent` | Confirms independently reproduced candidate findings.         |
 | Evaluation       | `FinalEvaluator`        | Classifies corroborated evidence into `Finding` values.       |
 | History          | `HistoryStore`          | Persists and retrieves `ScanHistory`.                         |
-| Reporting        | `ReportGenerator`       | Renders scan history into an output file.                     |
+| Reporting        | `ReportGenerator`       | Projects history into four separate report artifacts.         |
 
-`InMemoryHistoryStore` is the only executable implementation because it has no security
-side effects. It is explicitly non-durable and can later be replaced by SQLite or
-PostgreSQL without changing orchestration code.
+Discovery uses structured parsers for same-origin OpenAPI documents and HTML forms. Parsed
+`EndpointProfile` values carry URL, method, parameters, content types, and source. Planning
+selects an allowed writable endpoint and records that choice in `AttackPlan`; generated jobs use
+the selected method and parameter. Untrusted documents cannot introduce another origin.
+
+`SQLiteHistoryStore` is the production CLI default for real scans and writes lossless tagged
+JSON snapshots into SQLite after every lifecycle transition. `InMemoryHistoryStore` remains
+available for dry runs and tests. Either can be replaced through the same contract.
 
 ## Dependency direction
 
@@ -49,30 +56,74 @@ and lets each component be developed and tested independently.
 ## Logging and sensitive data
 
 `core.logging.configure_logging` centralizes the logging setup. Scan initialization logs
-the scan identifier only. Implementations must add contextual fields such as `job_id`,
-`attack_id`, `iteration`, and component name while never logging authorization headers,
-API keys, or request/response secrets.
+the scan identifier only. The orchestrator emits event metadata for discovery, planning, policy,
+execution, judging, adaptation, verification, final evaluation, report generation, and scan
+completion. It never logs authorization headers, API keys, request bodies, or response bodies.
+
+## Provider and policy separation
+
+`LLMProvider` receives bounded observations and candidate strategy IDs. Its output must contain
+the required fields and values from the caller-owned schema. Invalid output, timeout, rate-limit,
+transport, and provider failures produce deterministic fallback metadata. Provider output cannot
+bypass `AttackPolicy`, change scope, increase budgets, or communicate with the target.
+
+Built-in HTTP adapters support generic/local JSON, OpenAI-compatible chat completions, Azure
+OpenAI authentication, and Anthropic messages. The same provider contract can assist hypothesis
+metadata, ambiguous-response interpretation, and strategy selection. Judge evidence references
+always come from recorded `AttackResult` values, never provider output.
+
+`HttpTargetConnector` owns HTTP/HTTPS communication, environment-derived authentication headers,
+cookies, retries, timeout, concurrency, pacing, response normalization, and an actual request
+ceiling. `AttackExecutor` never creates another network client.
+Automatic redirects are disabled so an in-scope request cannot silently contact an out-of-scope
+destination. Redirects are normalized as evidence and require a separately proposed,
+policy-approved job before any destination is contacted.
 
 ## Extending SentinelLLM
 
-### Add an attack
+### Add a strategy
 
-Add an OWASP-aligned category or strategy definition under `planning`, implement an
-`AttackPlanner` that yields `AttackPlan` values, and an `AttackAgent` that creates
-controlled `AttackJob` values. Keep transport in `AttackExecutor` through the injected
-connector. Register the implementations only in the CLI composition root.
+Create an `AttackStrategy` with applicability, expected signals, success criteria, stop
+conditions, and remediation, then register it in `StrategyRegistry`. The planner and Agent
+consume the registry without changes.
 
 ### Add a connector
 
-Implement `TargetConnector.send` asynchronously, enforce target authorization and
-transport safety policy there, and inject it in place of `HttpTargetConnector`. Discovery
-and execution should remain unaware of HTTP client details.
+Implement `TargetConnector.send` asynchronously and inject it in place of
+`HttpTargetConnector`. Discovery and execution remain unaware of transport details. Scope and
+request authorization remain in the deterministic `AttackPolicy` gate.
 
 ### Add a judge
 
-Implement `AttackJudge.judge` with deterministic, reviewable evidence rules before any
-LLM-assisted logic. Return an explicit `JudgeResult`; do not declare a finding directly.
-The evaluator remains responsible for converting corroborated conclusions into findings.
+Implement `AttackJudge.judge` with deterministic, reviewable evidence rules before optional
+LLM-assisted interpretation. Return an explicit `JudgeResult`; do not declare a finding
+directly. The evaluator and verifier remain responsible for findings.
+
+### Add an LLM provider
+
+Provider integrations must return schema-validated strategy, hypothesis, observation, or
+finding decisions and fall back to deterministic behavior on timeout, malformed output, rate
+limits, provider failure, or context overflow. Providers never receive authority to send a
+request, alter scope, or change budgets.
+
+## Testing
+
+`tests/unit/test_adaptive.py` uses an in-process target connector to prove that a no-signal
+response causes a strategy switch, a subsequent controlled signal causes verification, and a
+distinct reproduction job is required before a finding is emitted. It also covers all-category
+strategy registration, applicability, duplicate prevention, scope enforcement, budgets, four
+report artifacts, and cross-report finding IDs.
+
+`tests/unit/test_discovery.py` verifies OpenAPI request-body extraction, HTML forms, malformed
+documents, and same-origin filtering. `tests/unit/test_llm.py` verifies schema rejection,
+provider fallback, hypothesis and Judge assistance, dedicated protocol envelopes, and adapter
+selection.
+`tests/unit/test_edge_cases.py` covers partial signals, abandonment, timeout/retry budgets,
+cancellation persistence, and failed verification. `tests/integration/test_demo_target.py`
+exercises OpenAPI-selected `/chat` execution, redirect protection, the real HTTP connector,
+session behavior, adaptive loop, SQLite restoration, final evaluation, and all four report files
+against `demo.target_app`. Every registered strategy is tested through generation, judging,
+candidate evaluation, and remediation creation.
 
 ## Development commands
 

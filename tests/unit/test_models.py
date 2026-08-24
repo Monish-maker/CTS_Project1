@@ -37,6 +37,8 @@ def test_yaml_mapping_converts_enabled_categories() -> None:
 def test_enum_values_are_stable() -> None:
     assert JudgeOutcome.INCONCLUSIVE.value == "inconclusive"
     assert ScanStatus.PENDING.value == "pending"
+    assert len(set(AttackCategory)) == 10
+    assert AttackCategory.IMPROPER_OUTPUT_HANDLING.value == "improper_output_handling"
 
 
 def test_judge_confidence_must_be_normalized() -> None:

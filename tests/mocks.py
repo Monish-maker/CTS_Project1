@@ -38,7 +38,9 @@ class MockDiscoveryAgent(DiscoveryAgent):
 
 
 class MockAttackPlanner(AttackPlanner):
-    async def plan(self, profile: TargetProfile, configuration: ScanConfiguration) -> tuple[AttackPlan, ...]:
+    async def plan(
+        self, profile: TargetProfile, configuration: ScanConfiguration
+    ) -> tuple[AttackPlan, ...]:
         return ()
 
 

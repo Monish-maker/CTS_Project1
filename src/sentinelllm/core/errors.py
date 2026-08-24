@@ -10,4 +10,4 @@ class ConfigurationError(SentinelLLMError):
 
 
 class FeatureNotImplementedError(SentinelLLMError):
-    """Raised by an explicit Phase 1 boundary placeholder."""
+    """Raised when an optional extension has no configured implementation."""

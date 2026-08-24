@@ -1,0 +1,25 @@
+target:
+  url: "http://127.0.0.1:8765"
+
+llm:
+  provider: "deterministic"
+
+scan:
+  timeout: 5
+  retries: 1
+  dry_run: false
+  max_iterations: 3
+  max_jobs: 5
+  max_requests: 10
+  max_requests_per_endpoint: 5
+  max_duration_seconds: 30
+  concurrency: 1
+  minimum_request_interval_seconds: 0
+  discovery_paths: ["/openapi.json"]
+  allowed_methods: ["GET", "POST"]
+
+attacks:
+  enabled: ["prompt_injection"]
+
+reporting:
+  output_directory: "./reports/demo"
