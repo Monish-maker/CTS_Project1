@@ -276,10 +276,15 @@ class ScanOrchestrator:
                     )
                     verification = await self._verifier.verify(candidate)
                     self._logger.info(
-                        "event=verification_completed scan_id=%s finding_id=%s status=%s",
+                        "event=verification_completed scan_id=%s finding_id=%s category=%s "
+                        "status=%s reason=%s jobs=%d strategies=%d",
                         configuration.scan_id,
                         candidate.finding_id,
+                        candidate.owasp_category,
                         verification.status.value,
+                        verification.reason,
+                        len(set(candidate.job_ids)),
+                        len(set(candidate.strategy_ids)),
                     )
                     history = self._save(
                         replace(
