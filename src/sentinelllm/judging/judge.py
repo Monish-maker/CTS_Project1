@@ -3,7 +3,7 @@
 from abc import ABC, abstractmethod
 
 from sentinelllm.core.enums import AdaptiveDecisionType, JudgeOutcome
-from sentinelllm.core.models import AttackPlan, AttackResult, JudgeResult
+from sentinelllm.core.models import AttackPlan, AttackResult, JudgeResult, Observation
 from sentinelllm.llm.provider import (
     DeterministicLLMProvider,
     LLMProvider,
@@ -16,9 +16,16 @@ class AttackJudge(ABC):
     """Interprets raw attack evidence against a planned objective."""
 
     @abstractmethod
-    async def judge(self, plan: AttackPlan, result: AttackResult) -> JudgeResult:
+    async def judge(
+        self, plan: AttackPlan, result: AttackResult, observation: Observation | None = None
+    ) -> JudgeResult:
         """Return a bounded judgment based on implemented evaluation logic."""
         raise NotImplementedError
+
+
+# Signals that indicate the target actually disclosed or executed something unsafe,
+# as opposed to merely echoing the scanner's own probe text back.
+_CONTENT_EVIDENCE_SIGNALS = ("security_keyword", "xss_payload")
 
 
 class DefaultAttackJudge(AttackJudge):
@@ -27,7 +34,9 @@ class DefaultAttackJudge(AttackJudge):
     def __init__(self, provider: LLMProvider | None = None) -> None:
         self.provider = provider or DeterministicLLMProvider()
 
-    async def judge(self, plan: AttackPlan, result: AttackResult) -> JudgeResult:
+    async def judge(
+        self, plan: AttackPlan, result: AttackResult, observation: Observation | None = None
+    ) -> JudgeResult:
         """Judge expected indicators while requiring verification for strong signals."""
         if result.errors:
             return JudgeResult(
@@ -42,7 +51,23 @@ class DefaultAttackJudge(AttackJudge):
         matched = tuple(
             str(indicator) for indicator in expected if str(indicator).lower() in response
         )
+        content_signals = tuple(
+            signal
+            for signal in (observation.signals if observation else ())
+            if signal in _CONTENT_EVIDENCE_SIGNALS
+        )
         references = result.evidence
+        if content_signals:
+            return JudgeResult(
+                JudgeOutcome.POTENTIAL_SUCCESS,
+                min(0.95, 0.7 + 0.1 * len(content_signals)),
+                "Response contained unsafe disclosed or executable content: "
+                f"{', '.join(content_signals)}; verification is required",
+                references,
+                result.job_id,
+                (*matched, *content_signals),
+                AdaptiveDecisionType.VERIFY,
+            )
         if matched:
             return JudgeResult(
                 JudgeOutcome.POTENTIAL_SUCCESS,

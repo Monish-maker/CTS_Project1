@@ -42,10 +42,28 @@ def analyze_response(
         record("reflected_input", "Attacker-controlled input was reflected", payload[:200])
     if marker and marker in lowered:
         record("expected_marker", "Controlled strategy marker appeared in output", marker)
-    for token in ("traceback", "stack trace", "api_key", "system prompt", "permission denied"):
+    for token in (
+        "traceback",
+        "stack trace",
+        "api_key",
+        "api key",
+        "system prompt",
+        "confidential",
+        "internal instructions",
+        "password",
+        "secret key",
+        "admin panel",
+        "connection string",
+        "permission denied",
+    ):
         if token in lowered:
             record(
                 "security_keyword", f"Response contained security-relevant token: {token}", token
+            )
+    for token in ("<script", "javascript:", "onerror=", "onload="):
+        if token in lowered:
+            record(
+                "xss_payload", f"Response reflected an executable markup token: {token}", token
             )
 
     try:

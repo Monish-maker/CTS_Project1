@@ -177,7 +177,7 @@ class ScanOrchestrator:
                         evidence=observation.evidence_references,
                         request_fingerprint=policy_decision.fingerprint,
                     )
-                    judgment = await self._judge.judge(plan, result)
+                    judgment = await self._judge.judge(plan, result, observation)
                     self._logger.info(
                         "event=judge_completed scan_id=%s job_id=%s outcome=%s confidence=%.2f",
                         configuration.scan_id,
