@@ -49,12 +49,21 @@ def analyze_response(
         "api key",
         "system prompt",
         "confidential",
+        "classified",
+        "proprietary",
         "internal instructions",
+        "internal docs",
+        "internal database",
         "password",
         "secret key",
         "admin panel",
         "connection string",
         "permission denied",
+        "keep this between us",
+        "between us",
+        "please don't tell",
+        "do not share",
+        "do not disclose",
     ):
         if token in lowered:
             record(
