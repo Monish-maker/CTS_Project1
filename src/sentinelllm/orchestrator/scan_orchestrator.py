@@ -163,6 +163,14 @@ class ScanOrchestrator:
                         result.http_status,
                         len(result.errors),
                     )
+                    if result.http_status and result.http_status >= 400:
+                        self._logger.warning(
+                            "event=target_error_response scan_id=%s job_id=%s status=%s body=%r",
+                            configuration.scan_id,
+                            current_job.job_id,
+                            result.http_status,
+                            (result.response or "")[:500],
+                        )
                     observation, evidence = analyze_response(current_job, result, baseline)
                     result = replace(
                         result,

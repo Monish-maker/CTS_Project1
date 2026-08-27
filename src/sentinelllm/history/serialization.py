@@ -14,6 +14,7 @@ _MODEL_TYPES = {
     item.__name__: item
     for item in (
         models.AuthenticationConfiguration,
+        models.TargetRequestConfiguration,
         models.RetryConfiguration,
         models.LLMConfiguration,
         models.ScanConfiguration,

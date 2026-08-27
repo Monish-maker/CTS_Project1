@@ -9,6 +9,7 @@ from sentinelllm.attacks.agent import DefaultAttackAgent
 from sentinelllm.attacks.executor import DefaultAttackExecutor
 from sentinelllm.attacks.policy import AttackPolicy
 from sentinelllm.connector.base import TargetConnector, TargetResponse
+from sentinelllm.core.config import scan_configuration_from_mapping
 from sentinelllm.core.enums import (
     AdaptiveDecisionType,
     AttackCategory,
