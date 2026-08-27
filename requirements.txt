@@ -1,0 +1,8 @@
+# Runtime dependencies
+PyYAML>=6.0
+
+# Development dependencies
+mypy>=1.10
+pytest>=8.0
+ruff>=0.5
+types-PyYAML>=6.0

@@ -1,0 +1,45 @@
+target:
+  url: "https://api.anthropic.com/v1/messages" # replace with your target URL
+  authentication: 
+    required: true
+    scheme: "Bearer"
+    header_name: "Authorization"
+    environment_variable: "SENTINEL_TARGET_TOKEN" # set this env var to your target API key
+
+llm:
+  provider: "openai_compatible" # options: openai_compatible, azure_openai, anthropic, deterministic
+  model: "gpt-4o" # replace with your model name
+  endpoint: "https://api.openai.com/v1/chat/completions" # replace with your LLM endpoint
+  api_key_environment_variable: "SENTINEL_LLM_API_KEY" # set this env var to your LLM API key
+  timeout: 30
+  retries: 2
+
+scan:
+  timeout: 15
+  retries: 2
+  dry_run: false
+  max_iterations: 5
+  max_jobs: 20
+  max_requests: 50
+  max_requests_per_endpoint: 10
+  max_duration_seconds: 300
+  concurrency: 1
+  minimum_request_interval_seconds: 1
+  discovery_paths: ["/openapi.json", "/swagger.json", "/docs"]
+  allowed_methods: ["GET", "POST"]
+
+attacks:
+  enabled:
+    - prompt_injection
+    - sensitive_information_disclosure
+    - excessive_agency
+    - supply_chain
+    - data_and_model_poisoning
+    - unbounded_consumption
+    - misinformation
+    - hidden_context_exposure
+    - vector_and_embedding_weaknesses
+    - improper_output_handling
+
+reporting:
+  output_directory: "./reports/external"
