@@ -31,10 +31,10 @@ def test_real_http_demo_scan_generates_verified_reports(tmp_path: Path) -> None:
         configuration = ScanConfiguration(
             target_url=target,
             enabled_attack_categories=(AttackCategory.PROMPT_INJECTION,),
-            maximum_attack_iterations=3,
-            maximum_jobs=5,
-            maximum_requests=5,
-            maximum_requests_per_endpoint=5,
+            maximum_attack_iterations=5,
+            maximum_jobs=10,
+            maximum_requests=10,
+            maximum_requests_per_endpoint=10,
             dry_run=False,
             reporting_output_directory=str(tmp_path),
         )

@@ -25,7 +25,14 @@ class AttackJudge(ABC):
 
 # Signals that indicate the target actually disclosed or executed something unsafe,
 # as opposed to merely echoing the scanner's own probe text back.
-_CONTENT_EVIDENCE_SIGNALS = ("security_keyword", "xss_payload")
+_CONTENT_EVIDENCE_SIGNALS = (
+    "security_keyword",
+    "xss_payload",
+    "unbounded_output",
+    "observed_tool_calls",
+    "observed_actions",
+    "observed_state_changes",
+)
 
 
 class DefaultAttackJudge(AttackJudge):
