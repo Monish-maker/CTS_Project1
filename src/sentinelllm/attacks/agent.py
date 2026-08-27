@@ -247,4 +247,9 @@ class DefaultAttackAgent(AttackAgent):
                 "max_tokens": configuration.target_request.max_tokens,
                 "messages": [{"role": "user", "content": prompt}],
             }
+        if configuration.target_request.format == "gemini_generate_content":
+            return {
+                "contents": [{"role": "user", "parts": [{"text": prompt}]}],
+                "generationConfig": {"maxOutputTokens": configuration.target_request.max_tokens},
+            }
         return {plan.parameter: prompt}

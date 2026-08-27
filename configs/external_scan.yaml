@@ -1,15 +1,12 @@
 target:
-  url: "https://api.anthropic.com/v1/messages"
-  headers:
-    anthropic-version: "2023-06-01"
+  url: "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent"
   request:
-    format: "anthropic_messages"
-    model: "claude-3-5-sonnet-latest"
+    format: "gemini_generate_content"
     max_tokens: 1024
   authentication:
     required: true
     scheme: null
-    header_name: "x-api-key"
+    header_name: "x-goog-api-key"
     environment_variable: "SENTINEL_TARGET_TOKEN"
 
 llm:

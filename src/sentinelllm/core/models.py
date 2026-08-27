@@ -45,7 +45,7 @@ class TargetRequestConfiguration:
     max_tokens: int = 1024
 
     def __post_init__(self) -> None:
-        if self.format not in {"single_field", "anthropic_messages"}:
+        if self.format not in {"single_field", "anthropic_messages", "gemini_generate_content"}:
             raise ConfigurationError("target request format is not supported")
         if self.max_tokens < 1:
             raise ConfigurationError("target request max_tokens must be at least one")
