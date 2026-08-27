@@ -2,6 +2,10 @@ target:
   url: "https://api.anthropic.com/v1/messages"
   headers:
     anthropic-version: "2023-06-01"
+  request:
+    format: "anthropic_messages"
+    model: "claude-3-5-sonnet-latest"
+    max_tokens: 1024
   authentication:
     required: true
     scheme: null

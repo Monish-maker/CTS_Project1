@@ -26,12 +26,24 @@ def test_invalid_target_url_is_rejected() -> None:
 def test_yaml_mapping_converts_enabled_categories() -> None:
     configuration = scan_configuration_from_mapping(
         {
-            "target": {"url": "http://127.0.0.1:8000"},
+            "target": {
+                "url": "http://127.0.0.1:8000",
+                "headers": {"anthropic-version": "2023-06-01"},
+                "request": {
+                    "format": "anthropic_messages",
+                    "model": "claude-3-5-sonnet-latest",
+                    "max_tokens": 512,
+                },
+            },
             "attacks": {"enabled": ["prompt_injection"]},
         }
     )
 
     assert configuration.enabled_attack_categories == (AttackCategory.PROMPT_INJECTION,)
+    assert configuration.target_headers == {"anthropic-version": "2023-06-01"}
+    assert configuration.target_request.format == "anthropic_messages"
+    assert configuration.target_request.model == "claude-3-5-sonnet-latest"
+    assert configuration.target_request.max_tokens == 512
 
 
 def test_enum_values_are_stable() -> None:

@@ -88,6 +88,43 @@ def test_every_strategy_generates_an_independent_job() -> None:
         assert strategy.prompt_template == job.request["json"]["prompt"]
 
 
+def test_anthropic_target_jobs_use_messages_payload() -> None:
+    registry = build_default_registry()
+    strategy = registry.for_category(AttackCategory.PROMPT_INJECTION)[0]
+    agent = DefaultAttackAgent(registry=registry)
+    configuration = scan_configuration_from_mapping(
+        {
+            "target": {
+                "url": "https://api.anthropic.com/v1/messages",
+                "request": {
+                    "format": "anthropic_messages",
+                    "model": "claude-3-5-sonnet-latest",
+                    "max_tokens": 256,
+                },
+            }
+        }
+    )
+    plan = AttackPlan(
+        attack_id="AT-anthropic",
+        category=strategy.category,
+        owasp_mapping="OWASP:2026",
+        objective=strategy.objective,
+        preconditions=(),
+        strategy=strategy.name,
+        expected_indicators=strategy.expected_signals,
+        risk_level=RiskLevel.MEDIUM,
+        strategy_id=strategy.strategy_id,
+    )
+
+    job = asyncio.run(agent.create_jobs((plan,), configuration))[0]
+
+    assert job.request["json"] == {
+        "model": "claude-3-5-sonnet-latest",
+        "max_tokens": 256,
+        "messages": [{"role": "user", "content": strategy.prompt_template}],
+    }
+
+
 def test_every_strategy_has_successful_judge_and_candidate_finding_handling() -> None:
     registry = build_default_registry()
     judge = DefaultAttackJudge()

@@ -37,6 +37,21 @@ class AuthenticationConfiguration:
 
 
 @dataclass(frozen=True, slots=True)
+class TargetRequestConfiguration:
+    """Target-specific request shaping for prompt-style endpoints."""
+
+    format: str = "single_field"
+    model: str | None = None
+    max_tokens: int = 1024
+
+    def __post_init__(self) -> None:
+        if self.format not in {"single_field", "anthropic_messages"}:
+            raise ConfigurationError("target request format is not supported")
+        if self.max_tokens < 1:
+            raise ConfigurationError("target request max_tokens must be at least one")
+
+
+@dataclass(frozen=True, slots=True)
 class LLMConfiguration:
     """Provider-neutral model configuration; API secrets stay outside persisted state."""
 
@@ -72,6 +87,7 @@ class ScanConfiguration:
     target_url: str
     scan_id: str = field(default_factory=lambda: str(uuid4()))
     target_headers: dict[str, str] = field(default_factory=dict)
+    target_request: TargetRequestConfiguration = field(default_factory=TargetRequestConfiguration)
     authentication: AuthenticationConfiguration = field(default_factory=AuthenticationConfiguration)
     llm: LLMConfiguration = field(default_factory=LLMConfiguration)
     timeout_seconds: float = 10.0

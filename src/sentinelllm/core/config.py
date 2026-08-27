@@ -14,6 +14,7 @@ from sentinelllm.core.models import (
     LLMConfiguration,
     RetryConfiguration,
     ScanConfiguration,
+    TargetRequestConfiguration,
 )
 
 
@@ -35,6 +36,7 @@ def scan_configuration_from_mapping(raw: dict[str, Any]) -> ScanConfiguration:
     attacks = raw.get("attacks", {})
     reporting = raw.get("reporting", {})
     authentication = target.get("authentication", {})
+    target_request = target.get("request", {})
     llm = raw.get("llm", {})
     try:
         categories = tuple(AttackCategory(value) for value in attacks.get("enabled", []))
@@ -44,6 +46,11 @@ def scan_configuration_from_mapping(raw: dict[str, Any]) -> ScanConfiguration:
         return ScanConfiguration(
             target_url=target["url"],
             target_headers=target_headers,
+            target_request=TargetRequestConfiguration(
+                format=str(target_request.get("format", "single_field")),
+                model=str(target_request["model"]) if target_request.get("model") else None,
+                max_tokens=int(target_request.get("max_tokens", 1024)),
+            ),
             authentication=AuthenticationConfiguration(
                 required=bool(authentication.get("required", False)),
                 scheme=str(authentication["scheme"]) if authentication.get("scheme") else None,

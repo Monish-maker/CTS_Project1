@@ -215,6 +215,7 @@ class DefaultAttackAgent(AttackAgent):
         strategy = self.registry.get(strategy_id)
         marker = strategy.expected_signals[-1]
         endpoint = plan.endpoint or configuration.target_url
+        prompt = strategy.prompt_template
         return AttackJob(
             job_id=f"AJ-{uuid4().hex[:12]}",
             scan_id=configuration.scan_id,
@@ -223,7 +224,7 @@ class DefaultAttackAgent(AttackAgent):
             request={
                 "method": plan.method,
                 "url": endpoint,
-                "json": {plan.parameter: strategy.prompt_template},
+                "json": self._request_json(plan, configuration, prompt),
             },
             metadata={
                 "category": plan.category.value,
@@ -236,3 +237,14 @@ class DefaultAttackAgent(AttackAgent):
                 "parameter": plan.parameter,
             },
         )
+
+    def _request_json(
+        self, plan: AttackPlan, configuration: ScanConfiguration, prompt: str
+    ) -> dict[str, object]:
+        if configuration.target_request.format == "anthropic_messages":
+            return {
+                "model": configuration.target_request.model or "claude-3-5-sonnet-latest",
+                "max_tokens": configuration.target_request.max_tokens,
+                "messages": [{"role": "user", "content": prompt}],
+            }
+        return {plan.parameter: prompt}
