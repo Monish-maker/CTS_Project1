@@ -1,0 +1,611 @@
+SentinelLLM Component Guide
+===========================
+
+Project name: SentinelLLM
+Full title: Contract-Driven AI/LLM Application Security Scanner
+
+Purpose
+-------
+SentinelLLM is a security scanner for applications that use LLMs, agents, retrieval, memory, tools, APIs, and user data. Its goal is not just to send random attack prompts. Its goal is to understand the target, plan controlled security tests, execute them safely, judge the responses, adapt the next attack, verify reproducible behavior, and generate evidence-based reports.
+
+Main use case
+-------------
+A security engineer, developer, auditor, or hackathon demo team can use SentinelLLM to test an AI application for LLM-specific risks such as prompt injection, sensitive information disclosure, excessive agency, unsafe tool use, RAG poisoning, hidden context exposure, misinformation, and improper output handling.
+
+The scanner helps answer questions like:
+- Does the target expose hidden instructions or secrets?
+- Does the model follow attacker-controlled instructions?
+- Does the application leak other users' or tenants' data?
+- Does the application produce unsafe HTML or JavaScript output?
+- Does the application trigger tool/action behavior without authorization?
+- Does the application handle malformed or poisoned context safely?
+- Can a suspicious response be reproduced by a second controlled test?
+
+High-level workflow
+-------------------
+1. User starts the scan through the CLI.
+2. Configuration is loaded from YAML or a direct target URL.
+3. TargetConnector prepares authenticated, bounded HTTP communication.
+4. DiscoveryAgent discovers the target and possible API endpoints.
+5. AttackPlanner selects relevant OWASP-style attack categories and strategies.
+6. AttackAgent turns plans into executable attack jobs.
+7. AttackPolicy checks scope, duplicates, HTTP methods, budgets, and limits.
+8. AttackExecutor sends approved jobs through the connector.
+9. Response analysis extracts signals and evidence from the target response.
+10. AttackJudge decides whether the response is failed, partial, potential success, or error.
+11. AttackAgent adapts by switching strategy, refining, verifying, or stopping.
+12. VerificationComponent confirms only reproduced candidate findings.
+13. FinalEvaluator promotes verified candidates to final security findings.
+14. HistoryStore persists the full scan lifecycle.
+15. ReportGenerator writes JSON and HTML security and attack journey reports.
+
+Important concept: contract-driven testing
+------------------------------------------
+SentinelLLM uses configuration and discovery as a security contract. The contract defines the target URL, authentication, allowed methods, scan budgets, discovery paths, enabled attack categories, LLM provider settings, and report location. This keeps the scanner bounded and auditable.
+
+Important concept: adaptive testing
+-----------------------------------
+SentinelLLM does not simply run a static prompt list. It observes each result and chooses what to do next. If a strategy fails, it can switch. If a response looks suspicious, it can verify. If evidence is enough or budget is exhausted, it stops.
+
+Important concept: verified findings
+------------------------------------
+A single suspicious response is not automatically a final vulnerability. SentinelLLM records it as a candidate and verifies it. By default, verification requires evidence reproduced across at least two distinct jobs and two distinct strategies.
+
+Repository root files
+---------------------
+pyproject.toml
+- Defines the Python package metadata, dependencies, optional dev dependencies, CLI entry point, pytest settings, ruff settings, and mypy settings.
+- Use case: tells Python tooling how to install, test, lint, and run SentinelLLM.
+
+requirements.txt
+- Lists runtime and development dependencies in pip requirements format.
+- Use case: lets users install dependencies with pip when they prefer requirements files.
+
+README.md
+- Main project documentation.
+- Use case: explains installation, development commands, CLI usage, config/secrets, discovery, OWASP coverage, adaptive execution, reports, and extension points.
+
+docs/architecture.md
+- Architecture-level explanation of component responsibilities, dependency direction, provider separation, logging, testing, and extension points.
+- Use case: helps developers and judges understand why the system is modular and auditable.
+
+docs/sentinelllm_hackathon_deck.html
+- Browser-based 12-slide hackathon presentation created for the project.
+- Use case: can be opened in a browser and presented or printed to PDF.
+
+docs/sentinelllm_component_guide.txt
+- This file.
+- Use case: plain-language explanation of every major project component and how it fits into the scanner.
+
+Configuration files
+-------------------
+configs/example_scan.yaml
+- Full example scan configuration.
+- Includes target URL, authentication settings, LLM provider settings, scan limits, attack categories, and reporting output.
+- Use case: template for scanning an authorized external target.
+
+configs/demo_scan.yaml
+- Local deterministic demo scan configuration.
+- Points at the local demo target running on http://127.0.0.1:8765.
+- Use case: demonstrates SentinelLLM without needing external API keys.
+
+configs/external_scan.yaml
+- External target scan configuration.
+- Use case: configured during testing to point at Claude, Gemini, or another API target with environment-variable-based credentials.
+
+Demo application
+----------------
+demo/__init__.py
+- Marks the demo folder as a Python package.
+- Use case: allows running the demo target with python -m demo.target_app.
+
+demo/target_app.py
+- A deterministic local LLM-like HTTP target.
+- Exposes GET /openapi.json for discovery and POST /chat for attack execution.
+- Simulates vulnerable AI responses in a controlled way.
+- Tracks attempts per category so the scanner can demonstrate switching, verification, and finding generation.
+- Use case: local demo target for hackathon presentations, integration tests, and report generation without a real LLM provider.
+
+Main package: src/sentinelllm
+-----------------------------
+src/sentinelllm/__init__.py
+- Package entry file.
+- Exposes the ScanConfiguration model.
+- Use case: makes SentinelLLM importable as a Python package.
+
+src/sentinelllm/cli.py
+- Command-line entry point.
+- Defines the sentinelllm scan command.
+- Loads YAML configuration or direct target URLs.
+- Builds the production ScanOrchestrator by wiring concrete components together.
+- Reads target authentication secrets from environment variables.
+- Use case: this is what users run from the terminal to start a scan.
+
+Core package
+------------
+src/sentinelllm/core/__init__.py
+- Core package marker.
+- Use case: groups shared core models, enums, errors, logging, and configuration.
+
+src/sentinelllm/core/config.py
+- Loads scan YAML files.
+- Converts raw YAML dictionaries into strongly typed ScanConfiguration objects.
+- Validates categories, scan limits, authentication settings, target headers, target request format, and LLM settings.
+- Use case: keeps external configuration parsing separate from the CLI and scanner logic.
+
+src/sentinelllm/core/enums.py
+- Defines shared enum values.
+- Includes attack categories, job status, scan status, judge outcomes, risk levels, coverage status, hypothesis status, verification status, and adaptation decisions.
+- Use case: prevents stringly typed state across the scanner.
+
+src/sentinelllm/core/errors.py
+- Defines project-specific errors such as ConfigurationError.
+- Use case: gives the CLI and components a clean way to report configuration problems.
+
+src/sentinelllm/core/logging.py
+- Central logging setup.
+- Use case: makes scanner logs consistent across CLI, orchestrator, and components.
+
+src/sentinelllm/core/models.py
+- Defines the main domain data models.
+- Important models include AuthenticationConfiguration, TargetRequestConfiguration, LLMConfiguration, RetryConfiguration, ScanConfiguration, EndpointProfile, TargetProfile, AttackPlan, AttackJob, AttackResult, Evidence, Observation, AttackHypothesis, AdaptationDecision, PolicyDecision, CategoryCoverage, JudgeResult, Finding, and ScanHistory.
+- Use case: this is the shared language of the scanner. Every component passes typed objects instead of loose dictionaries where possible.
+
+Connector package
+-----------------
+src/sentinelllm/connector/__init__.py
+- Connector package marker.
+- Use case: groups target communication abstractions and implementations.
+
+src/sentinelllm/connector/base.py
+- Defines TargetConnector and TargetResponse.
+- TargetConnector is the abstract contract for sending requests.
+- TargetResponse normalizes status code, response body, headers, and metadata.
+- Use case: lets the rest of the scanner use target transport without knowing how HTTP is implemented.
+
+src/sentinelllm/connector/http.py
+- Standard-library HTTP connector implementation.
+- Handles headers, JSON bodies, cookies, redirects, retries, timeouts, concurrency, pacing, and request budgets.
+- Disables automatic redirects so the scanner does not silently contact out-of-scope destinations.
+- Use case: sends real HTTP requests to authorized targets safely and consistently.
+
+Discovery package
+-----------------
+src/sentinelllm/discovery/__init__.py
+- Discovery package marker.
+- Use case: groups discovery contracts and logic.
+
+src/sentinelllm/discovery/base.py
+- Defines DiscoveryAgent abstract contract.
+- Use case: establishes that discovery produces a TargetProfile from a ScanConfiguration and TargetConnector.
+
+src/sentinelllm/discovery/discovery_agent.py
+- Default discovery implementation.
+- Sends a baseline request to the target.
+- Checks content, headers, and response body for LLM/RAG/tool/structured-output signals.
+- Tries configured discovery paths such as /openapi.json and /swagger.json.
+- Builds EndpointProfile and TargetProfile objects.
+- Use case: helps SentinelLLM understand what the target looks like before planning attacks.
+
+src/sentinelllm/discovery/parsers.py
+- Parses OpenAPI JSON and HTML forms.
+- Extracts endpoint URLs, methods, parameters, content types, and same-origin forms.
+- Rejects external form actions/endpoints.
+- Use case: turns discovered documents into safe, usable endpoint profiles.
+
+Planning package
+----------------
+src/sentinelllm/planning/__init__.py
+- Planning package marker.
+- Use case: groups attack planning components.
+
+src/sentinelllm/planning/attack_planner.py
+- Defines AttackPlanner and DefaultAttackPlanner.
+- Selects applicable strategies from the registry based on enabled categories and target profile.
+- Chooses writable discovered endpoints when available.
+- Builds AttackPlan objects.
+- Use case: decides what high-level attack plans should be attempted.
+
+src/sentinelllm/planning/strategies.py
+- Defines AttackStrategy, StrategyRegistry, and the default OWASP-style strategy registry.
+- Contains 10 LLM security categories.
+- Registers 5 techniques per category: baseline, boundary, mutation, context, and verification.
+- Each strategy has objective, description, prompt template, expected signals, success criteria, stop conditions, remediation guidance, risk level, and applicability requirements.
+- Use case: this is the scanner's attack knowledge base.
+
+Attacks package
+---------------
+src/sentinelllm/attacks/__init__.py
+- Attacks package marker.
+- Use case: groups attack generation, execution, policy, analysis, and related compatibility modules.
+
+src/sentinelllm/attacks/agent.py
+- Defines AttackAgent and DefaultAttackAgent.
+- Creates initial AttackJob objects from AttackPlan objects.
+- Creates and refines hypotheses.
+- Adapts after every observed response by choosing switch_strategy, refine_strategy, verify, or stop.
+- Builds provider-specific target request payloads such as single-field prompt bodies, Anthropic messages bodies, or Gemini generateContent bodies when configured.
+- Use case: controls the adaptive attack journey.
+
+src/sentinelllm/attacks/analysis.py
+- Converts raw AttackResult responses into Observation and Evidence objects.
+- Detects server errors, redirects, authentication changes, reflected input, expected markers, structured output, tool calls, actions, state changes, security keywords, XSS payloads, unbounded output, and baseline deviation.
+- Use case: extracts observable security signals without making the final vulnerability decision.
+
+src/sentinelllm/attacks/executor.py
+- Defines AttackExecutor and DefaultAttackExecutor.
+- Executes an approved AttackJob through the injected TargetConnector.
+- Normalizes execution results into AttackResult objects.
+- Use case: separates job execution from planning, judging, and HTTP implementation.
+
+src/sentinelllm/attacks/policy.py
+- Defines AttackPolicy.
+- Validates each job before execution.
+- Enforces target scope, allowed HTTP methods, duplicate fingerprints, per-endpoint request budgets, scan request budgets, and job limits.
+- Use case: prevents uncontrolled or out-of-scope scanning.
+
+src/sentinelllm/attacks/models.py
+- Compatibility/re-export module for attack-related core models.
+- Use case: keeps older or attack-focused imports clean.
+
+src/sentinelllm/attacks/result.py
+- Compatibility/re-export module for AttackResult.
+- Use case: keeps imports stable for code that expects attack results under attacks.
+
+Judging package
+---------------
+src/sentinelllm/judging/__init__.py
+- Judging package marker.
+- Use case: groups judge contracts and model re-exports.
+
+src/sentinelllm/judging/judge.py
+- Defines AttackJudge and DefaultAttackJudge.
+- Decides whether a response is failed, partial, potential success, successful, inconclusive, or error.
+- Uses deterministic evidence rules first, then optional LLM-assisted interpretation for ambiguous cases.
+- Validates that evidence references come from recorded results, not from the LLM provider.
+- Use case: turns evidence into a bounded security judgment.
+
+src/sentinelllm/judging/models.py
+- Compatibility/re-export module for JudgeResult.
+- Use case: keeps judge-related imports stable.
+
+LLM provider package
+--------------------
+src/sentinelllm/llm/__init__.py
+- Exposes LLM provider classes and helper functions.
+- Use case: simplifies imports for provider creation and testing.
+
+src/sentinelllm/llm/provider.py
+- Defines the LLMProvider interface and concrete provider adapters.
+- Includes DeterministicLLMProvider, HttpJSONLLMProvider, OpenAICompatibleProvider, AzureOpenAIProvider, and AnthropicProvider.
+- Builds provider-specific request payloads and authentication headers.
+- Validates structured LLM outputs against required fields and allowed values.
+- Falls back safely if provider output is malformed, unavailable, or out of schema.
+- Use case: lets an external LLM assist hypothesis wording, ambiguous judging, and next-strategy selection without controlling policy or evidence.
+
+Evaluation package
+------------------
+src/sentinelllm/evaluation/__init__.py
+- Evaluation package marker.
+- Use case: groups final evaluator and remediation logic.
+
+src/sentinelllm/evaluation/evaluator.py
+- Defines FinalEvaluator and DefaultFinalEvaluator.
+- Converts strong judged results into candidate findings.
+- Promotes only verified candidate findings into final report findings.
+- Deduplicates findings by category and attack identity.
+- Use case: separates raw judgment from final vulnerability reporting.
+
+src/sentinelllm/evaluation/remediation.py
+- Defines remediation guidance per attack category.
+- Includes missing security control, immediate actions, corrective measures, and validation steps.
+- Use case: turns findings into practical remediation advice.
+
+Verification package
+--------------------
+src/sentinelllm/verification/__init__.py
+- Verification package marker.
+- Use case: groups verification components.
+
+src/sentinelllm/verification/verifier.py
+- Defines VerificationComponent, VerificationResult, and DefaultVerificationComponent.
+- Requires reproduced evidence across distinct jobs and distinct strategies.
+- Use case: prevents single-response noise from becoming a final vulnerability.
+
+History package
+---------------
+src/sentinelllm/history/__init__.py
+- History package marker.
+- Use case: groups persistence logic.
+
+src/sentinelllm/history/store.py
+- Defines HistoryStore, InMemoryHistoryStore, and SQLiteHistoryStore.
+- InMemoryHistoryStore is used for dry runs and tests.
+- SQLiteHistoryStore persists complete scan snapshots in sentinelllm_history.sqlite3.
+- Use case: keeps every scan step auditable and recoverable.
+
+src/sentinelllm/history/serialization.py
+- Serializes and deserializes ScanHistory while preserving dataclasses, enums, tuples, and datetimes.
+- Use case: stores complex typed scan history safely in SQLite as tagged JSON.
+
+Orchestrator package
+--------------------
+src/sentinelllm/orchestrator/__init__.py
+- Orchestrator package marker.
+- Use case: groups workflow orchestration.
+
+src/sentinelllm/orchestrator/scan_orchestrator.py
+- Central workflow coordinator.
+- Runs discovery, planning, policy checks, execution, analysis, judging, adaptation, verification, evaluation, history persistence, and report generation.
+- Does not directly implement HTTP, planning, judging, or rendering; those are injected components.
+- Use case: owns the scan lifecycle and guarantees each transition is recorded.
+
+Reporting package
+-----------------
+src/sentinelllm/reporting/__init__.py
+- Reporting package marker.
+- Use case: groups report contracts and implementations.
+
+src/sentinelllm/reporting/base.py
+- Defines ReportGenerator interface.
+- Use case: standard contract for report generation.
+
+src/sentinelllm/reporting/bundle.py
+- Defines ReportBundleGenerator.
+- Generates both JSON and HTML report families together.
+- Use case: creates the complete report package for each scan.
+
+src/sentinelllm/reporting/data.py
+- Builds structured report dictionaries from ScanHistory.
+- Creates security report data and adaptive attack journey report data.
+- Redacts sensitive fields such as authorization, API keys, tokens, cookies, passwords, and secrets.
+- Extracts readable conversation data: prompt sent, response received, and HTTP status.
+- Use case: transforms internal scan history into report-ready data.
+
+src/sentinelllm/reporting/html_reporter.py
+- Writes self-contained HTML reports.
+- Security report shows executive summary, OWASP coverage, findings, impact, evidence, and remediation.
+- Attack report shows timeline, search/filter controls, request/response conversation, strategy transitions, and statistics.
+- Use case: gives humans a readable audit trail and security summary.
+
+src/sentinelllm/reporting/json_reporter.py
+- Writes machine-readable JSON reports.
+- Handles datetimes, dates, and enums for JSON serialization.
+- Use case: lets CI/CD, dashboards, or other tools consume scan output.
+
+Report outputs
+--------------
+reports/demo/sentinelllm_history.sqlite3
+- SQLite scan history database for demo runs.
+- Use case: durable local scan audit history.
+
+reports/demo/<scan_id>/sentinelllm_security_report.html
+- Human-readable verified security assessment.
+- Use case: share with judges, security teams, or developers.
+
+reports/demo/<scan_id>/sentinelllm_security_report.json
+- Machine-readable security assessment.
+- Use case: automation, dashboards, or CI/CD integration.
+
+reports/demo/<scan_id>/sentinelllm_attack_report.html
+- Human-readable adaptive attack journey.
+- Use case: shows what the scanner tried, what the target returned, how the judge decided, and how the strategy changed.
+
+reports/demo/<scan_id>/sentinelllm_attack_report.json
+- Machine-readable adaptive attack journey.
+- Use case: detailed audit trail and debugging.
+
+Tests
+-----
+tests/__init__.py
+- Test package marker.
+- Use case: organizes the test suite.
+
+tests/mocks.py
+- Mock components used by tests.
+- Use case: makes tests deterministic without external network dependencies.
+
+tests/unit/test_adaptive.py
+- Tests strategy registration, job generation, judging, adaptive follow-up, duplicate prevention, policy behavior, report generation, statistics, SQLite history, and candidate finding behavior.
+- Use case: validates the adaptive scanner core.
+
+tests/unit/test_cli.py
+- Tests CLI help, pending dry-run behavior, and safe environment-variable authentication handling.
+- Use case: validates command-line behavior and secret handling.
+
+tests/unit/test_discovery.py
+- Tests OpenAPI parsing, HTML form parsing, malformed documents, same-origin filtering, and discovery behavior.
+- Use case: validates target discovery safely.
+
+tests/unit/test_edge_cases.py
+- Tests partial signals, abandoned hypotheses, timeout/retry behavior, cancellation persistence, verification failure, and edge workflow behavior.
+- Use case: proves the scanner behaves predictably under failures and limits.
+
+tests/unit/test_interfaces.py
+- Tests interface contracts and abstract component boundaries.
+- Use case: ensures components keep their intended responsibilities.
+
+tests/unit/test_llm.py
+- Tests LLM structured-output validation, provider fallback, hypothesis refinement, provider-assisted judging, provider adapters, and provider factory selection.
+- Use case: validates external model integration boundaries.
+
+tests/unit/test_models.py
+- Tests core models, configuration parsing, enum stability, and validation errors.
+- Use case: protects the scanner's shared domain model.
+
+tests/unit/test_orchestrator.py
+- Tests orchestration behavior.
+- Use case: validates workflow coordination.
+
+tests/integration/__init__.py
+- Integration test package marker.
+- Use case: separates integration tests from unit tests.
+
+tests/integration/test_demo_target.py
+- Runs the real HTTP connector against the local demo target.
+- Verifies discovery, execution against /chat, redirect protection, session behavior, adaptive loop, SQLite restoration, final evaluation, and report files.
+- Use case: end-to-end proof that SentinelLLM works as a local scanner.
+
+How the main data objects move through the system
+-------------------------------------------------
+ScanConfiguration
+- Created by CLI/config loader.
+- Contains target, auth, LLM, attack, scan, and report settings.
+
+TargetProfile
+- Created by DiscoveryAgent.
+- Describes discovered capabilities and endpoints.
+
+AttackPlan
+- Created by AttackPlanner.
+- Describes what to test and why.
+
+AttackJob
+- Created by AttackAgent.
+- Contains the actual request to send.
+
+PolicyDecision
+- Created by AttackPolicy.
+- Says whether a job is approved and why.
+
+AttackResult
+- Created by AttackExecutor.
+- Contains raw HTTP status, response body, headers, metadata, and errors.
+
+Observation
+- Created by analyze_response.
+- Summarizes evidence signals found in the result.
+
+Evidence
+- Created by analyze_response.
+- Records concrete facts that support later judging and findings.
+
+JudgeResult
+- Created by AttackJudge.
+- Classifies the result and recommends next action.
+
+AttackHypothesis
+- Created/refined by AttackAgent.
+- Tracks what the scanner believes may be happening.
+
+AdaptationDecision
+- Created by AttackAgent.
+- Records whether the scanner switched strategy, refined, verified, or stopped.
+
+Finding
+- Created by FinalEvaluator from strong judged results.
+- Promoted to final finding only after verification.
+
+ScanHistory
+- Central lifecycle record.
+- Stores configuration, target profile, plans, jobs, decisions, results, evidence, observations, judgments, hypotheses, adaptations, candidate findings, verification results, final findings, errors, and timestamps.
+
+Supported LLM security categories
+---------------------------------
+1. Prompt Injection
+- Tests whether untrusted text can override system/application instructions.
+- Example risk: model follows attacker instruction instead of trusted policy.
+
+2. Sensitive Information Disclosure
+- Tests whether the target leaks credentials, private data, tenant data, hidden values, internal docs, or protected context.
+- Example risk: model reveals project details, API keys, passwords, or customer data.
+
+3. Excessive Agency
+- Tests whether the model/tool layer performs unauthorized actions.
+- Example risk: refund, delete, email, execute command, or update state without approval.
+
+4. Supply Chain
+- Tests provenance and trust boundaries around models, plugins, data, prompts, dependencies, and tools.
+- Example risk: unverified plugin or model source is trusted blindly.
+
+5. Data and Model Poisoning
+- Tests whether untrusted or conflicting content can corrupt behavior or policy.
+- Example risk: target absorbs malicious context as trusted knowledge.
+
+6. Unbounded Consumption
+- Tests whether the target can be pushed into excessive output, tokens, requests, cost, or time.
+- Example risk: expensive or runaway response generation.
+
+7. Misinformation
+- Tests whether the target makes confident unsupported claims.
+- Example risk: gives false high-impact advice without uncertainty or sources.
+
+8. Hidden Context Exposure
+- Tests whether hidden system prompts, developer messages, internal context, or guardrails leak.
+- Example risk: system prompt exposure.
+
+9. Vector and Embedding Weaknesses
+- Tests retrieval isolation, tenant separation, and indexed-content trust.
+- Example risk: one tenant retrieves another tenant's confidential data.
+
+10. Improper Output Handling
+- Tests whether model output is treated as trusted executable content.
+- Example risk: XSS, unsafe HTML, script injection, unsafe markdown links.
+
+How to run the local demo
+-------------------------
+Terminal 1:
+python -m demo.target_app --port 8765
+
+Terminal 2:
+sentinelllm scan --config configs/demo_scan.yaml
+
+Expected output:
+- A new scan ID is logged.
+- Reports are written under reports/demo/<scan_id>/.
+- The attack journey report shows every prompt sent and every response received.
+- The security report shows verified findings and OWASP category coverage.
+
+How to run tests
+----------------
+Install development dependencies:
+python -m pip install -e ".[dev]"
+
+Run all tests:
+pytest
+
+Run focused integration test:
+python -m pytest tests/integration/test_demo_target.py -q
+
+Run lint/type checks:
+ruff check .
+mypy .
+
+Security and safety boundaries
+------------------------------
+- Secrets are referenced through environment variables, not stored directly in config.
+- Report data redacts sensitive keys such as authorization, tokens, cookies, passwords, and API keys.
+- Every job must pass AttackPolicy before execution.
+- Redirects are not automatically followed.
+- Request budgets and timeouts prevent unbounded scanning.
+- LLM providers cannot create evidence, execute target requests, bypass policy, or expand scan scope.
+- Findings require verification before final reporting.
+
+Why the project is useful
+-------------------------
+SentinelLLM is useful because LLM applications fail differently from traditional web apps. A standard scanner can find missing headers or SQL injection patterns, but it usually cannot understand model behavior, hidden context exposure, tool misuse, retrieval leakage, or prompt-driven control flow. SentinelLLM focuses on those AI-specific behaviors and creates reports that show the attack journey, evidence, and remediation.
+
+Hackathon value
+---------------
+For a hackathon, SentinelLLM demonstrates:
+- A clear AI security problem.
+- A modular scanner architecture.
+- OWASP-style LLM security coverage.
+- Adaptive attack execution.
+- Evidence-based judging.
+- Reproducible verification.
+- Professional HTML/JSON reports.
+- A local deterministic demo target that can show vulnerabilities without depending on paid APIs.
+
+Possible future improvements
+----------------------------
+- Stronger semantic LLM-as-judge behavior with robust retry/backoff.
+- More provider-specific target request adapters.
+- Richer security contracts and manifests.
+- Better dashboards and trend tracking.
+- Multi-turn attack chains.
+- More realistic RAG poisoning simulations.
+- Tool/agent sandbox testing.
+- CI/CD integration.
+- Distributed scanning.
+- Continuous AI security monitoring.
