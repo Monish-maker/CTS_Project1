@@ -38,8 +38,12 @@ def scan_configuration_from_mapping(raw: dict[str, Any]) -> ScanConfiguration:
     llm = raw.get("llm", {})
     try:
         categories = tuple(AttackCategory(value) for value in attacks.get("enabled", []))
+        target_headers = {
+            str(key): str(value) for key, value in target.get("headers", {}).items()
+        }
         return ScanConfiguration(
             target_url=target["url"],
+            target_headers=target_headers,
             authentication=AuthenticationConfiguration(
                 required=bool(authentication.get("required", False)),
                 scheme=str(authentication["scheme"]) if authentication.get("scheme") else None,

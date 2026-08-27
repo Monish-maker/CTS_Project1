@@ -40,7 +40,7 @@ def build_parser() -> argparse.ArgumentParser:
 def build_orchestrator(configuration: ScanConfiguration | None = None) -> ScanOrchestrator:
     """Compose production components behind the established contracts."""
     configuration = configuration or ScanConfiguration(target_url="http://127.0.0.1")
-    authentication_headers = _authentication_headers(configuration)
+    target_headers = {**configuration.target_headers, **_authentication_headers(configuration)}
     provider = build_llm_provider(configuration.llm)
     history = (
         InMemoryHistoryStore()
@@ -53,7 +53,7 @@ def build_orchestrator(configuration: ScanConfiguration | None = None) -> ScanOr
         connector=HttpTargetConnector(
             timeout_seconds=configuration.timeout_seconds,
             retries=configuration.retry.attempts,
-            default_headers=authentication_headers,
+            default_headers=target_headers,
             concurrency=configuration.concurrency,
             minimum_request_interval_seconds=configuration.minimum_request_interval_seconds,
             maximum_requests=configuration.maximum_requests,

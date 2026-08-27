@@ -71,6 +71,7 @@ class ScanConfiguration:
 
     target_url: str
     scan_id: str = field(default_factory=lambda: str(uuid4()))
+    target_headers: dict[str, str] = field(default_factory=dict)
     authentication: AuthenticationConfiguration = field(default_factory=AuthenticationConfiguration)
     llm: LLMConfiguration = field(default_factory=LLMConfiguration)
     timeout_seconds: float = 10.0

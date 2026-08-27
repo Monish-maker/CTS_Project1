@@ -1,16 +1,18 @@
 target:
-  url: "https://api.anthropic.com/v1/messages" # replace with your target URL
-  authentication: 
+  url: "https://api.anthropic.com/v1/messages"
+  headers:
+    anthropic-version: "2023-06-01"
+  authentication:
     required: true
-    scheme: "Bearer"
-    header_name: "Authorization"
-    environment_variable: "SENTINEL_TARGET_TOKEN" # set this env var to your target API key
+    scheme: null
+    header_name: "x-api-key"
+    environment_variable: "SENTINEL_TARGET_TOKEN"
 
 llm:
-  provider: "openai_compatible" # options: openai_compatible, azure_openai, anthropic, deterministic
-  model: "gpt-4o" # replace with your model name
-  endpoint: "https://api.openai.com/v1/chat/completions" # replace with your LLM endpoint
-  api_key_environment_variable: "SENTINEL_LLM_API_KEY" # set this env var to your LLM API key
+  provider: "openai_compatible"
+  model: "gpt-4o"
+  endpoint: "https://api.openai.com/v1/chat/completions"
+  api_key_environment_variable: "SENTINEL_LLM_API_KEY"
   timeout: 30
   retries: 2
 
