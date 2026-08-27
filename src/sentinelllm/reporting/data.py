@@ -2,12 +2,79 @@
 
 from __future__ import annotations
 
+import json
 from dataclasses import asdict
 from typing import Any, cast
 
 from sentinelllm.core.enums import AttackCategory, CoverageStatus, JudgeOutcome, VerificationStatus
-from sentinelllm.core.models import ScanHistory
+from sentinelllm.core.models import AttackResult, ScanHistory
 from sentinelllm.planning.strategies import build_default_registry
+
+
+def _prompt_sent(request: dict[str, Any]) -> str:
+    """Recover the human-readable prompt from a provider-specific request body."""
+    payload = request.get("json") if isinstance(request, dict) else None
+    if not isinstance(payload, dict):
+        body = request.get("body") if isinstance(request, dict) else None
+        return str(body) if body is not None else ""
+    messages = payload.get("messages")
+    if isinstance(messages, list):
+        parts = [
+            str(message.get("content", ""))
+            for message in messages
+            if isinstance(message, dict) and message.get("role") == "user"
+        ]
+        if parts:
+            return "\n".join(parts)
+    contents = payload.get("contents")
+    if isinstance(contents, list):
+        parts = [
+            str(part["text"])
+            for entry in contents
+            if isinstance(entry, dict)
+            for part in entry.get("parts", [])
+            if isinstance(part, dict) and "text" in part
+        ]
+        if parts:
+            return "\n".join(parts)
+    for key in ("prompt", "input", "text", "query"):
+        if key in payload:
+            return str(payload[key])
+    return json.dumps(payload, default=str)
+
+
+def _response_received(result: AttackResult | None) -> str:
+    """Recover the model's reply text from a provider-specific response body."""
+    if result is None or result.response is None:
+        return ""
+    body = result.response
+    try:
+        parsed = json.loads(body)
+    except (TypeError, ValueError):
+        return body
+    if not isinstance(parsed, dict):
+        return body
+    choices = parsed.get("choices")
+    if isinstance(choices, list) and choices and isinstance(choices[0], dict):
+        message = choices[0].get("message", {})
+        content = message.get("content") if isinstance(message, dict) else None
+        if isinstance(content, str):
+            return content
+    content_blocks = parsed.get("content")
+    if isinstance(content_blocks, list) and content_blocks and isinstance(content_blocks[0], dict):
+        text = content_blocks[0].get("text")
+        if isinstance(text, str):
+            return text
+    candidates = parsed.get("candidates")
+    if isinstance(candidates, list) and candidates and isinstance(candidates[0], dict):
+        candidate_content = candidates[0].get("content", {})
+        parts = candidate_content.get("parts", []) if isinstance(candidate_content, dict) else []
+        if parts and isinstance(parts[0], dict) and "text" in parts[0]:
+            return str(parts[0]["text"])
+    error = parsed.get("error")
+    if isinstance(error, dict) and "message" in error:
+        return f"Error: {error['message']}"
+    return body
 
 
 def security_report_data(history: ScanHistory) -> dict[str, Any]:
@@ -134,12 +201,18 @@ def attack_report_data(history: ScanHistory) -> dict[str, Any]:
             ),
             None,
         )
+        result = results.get(job.job_id)
         iterations.append(
             {
                 "iteration": job.iteration,
                 "category": job.metadata.get("category"),
                 "strategy": job.metadata.get("strategy"),
                 "hypothesis": job.metadata.get("hypothesis_id"),
+                "conversation": {
+                    "prompt_sent": _prompt_sent(job.request),
+                    "response_received": _response_received(result),
+                    "http_status": result.http_status if result else None,
+                },
                 "attack_job": asdict(job),
                 "target_response": asdict(results[job.job_id]) if job.job_id in results else None,
                 "response_analysis": asdict(observations[job.job_id])

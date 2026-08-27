@@ -44,6 +44,9 @@ def _page(title: str, subtitle: str, content: str) -> str:
         "pre{white-space:pre-wrap;max-height:420px;overflow:auto}"
         "details{margin:10px 0}.timeline{border-left:3px solid var(--teal);"
         "padding-left:24px}.muted{color:#53605a}a{color:var(--teal)}"
+        ".conversation{background:#f7f5ee;border:1px solid var(--line);"
+        "border-radius:4px;padding:10px 14px;margin:10px 0}"
+        ".conversation pre{background:#fff;border:1px solid var(--line);padding:8px}"
         ".filters{display:grid;grid-template-columns:2fr 1fr 1fr;gap:10px;margin:16px 0}"
         ".filters input,.filters select{width:100%;padding:9px;border:1px solid var(--line);"
         "background:var(--panel);color:var(--ink);font:inherit}"
@@ -130,7 +133,15 @@ def _attack_html(data: dict[str, Any]) -> str:
         observation = item["response_analysis"] or {}
         judgment = item["judge_result"] or {}
         adaptation = item["adaptation_decision"] or {}
-        raw = json.dumps(item["target_response"], indent=2, default=_json_default)
+        conversation = item.get("conversation") or {}
+        prompt_sent = str(conversation.get("prompt_sent", ""))
+        response_received = str(conversation.get("response_received", ""))
+        http_status = conversation.get("http_status")
+        raw = json.dumps(
+            {"request": item["attack_job"]["request"], "response": item["target_response"]},
+            indent=2,
+            default=_json_default,
+        )
         search_text = " ".join(
             str(value)
             for value in (
@@ -159,7 +170,12 @@ def _attack_html(data: dict[str, Any]) -> str:
             f"{html.escape(str(adaptation.get('next_strategy_id', 'none')))}</p>"
             "<p><strong>Concise reason:</strong> "
             f"{html.escape(str(adaptation.get('reason', '')))}</p>"
-            "<details><summary>Request and response</summary>"
+            "<div class='conversation'>"
+            "<p><strong>Prompt sent to model:</strong></p>"
+            f"<pre>{html.escape(prompt_sent) or '(empty)'}</pre>"
+            f"<p><strong>Response received</strong> (HTTP {html.escape(str(http_status))}):</p>"
+            f"<pre>{html.escape(response_received) or '(no response body)'}</pre></div>"
+            "<details><summary>Raw request and response (JSON)</summary>"
             f"<pre>{html.escape(raw)}</pre></details></article>"
         )
     stats = data["attack_statistics"]
