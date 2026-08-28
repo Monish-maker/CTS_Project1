@@ -64,13 +64,17 @@ class HttpJSONLLMProvider(LLMProvider):
                 return validate_structured_output(request, response)
             except (
                 TimeoutError,
-                HTTPError,
                 URLError,
                 OSError,
                 ValueError,
                 LLMProviderError,
             ) as error:
                 last_error = f"{type(error).__name__}: {error}"
+            except HTTPError as error:
+                body = error.read().decode("utf-8", errors="replace")
+                raise LLMProviderError(
+                    f"provider returned HTTP {error.code}: {body[:1000]}"
+                ) from error
         raise LLMProviderError(last_error)
 
     def _complete_sync(self, request: StructuredLLMRequest) -> dict[str, Any]:

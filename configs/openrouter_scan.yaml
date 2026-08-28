@@ -1,18 +1,18 @@
 target:
-  url: "https://basilisk-vulnbot.onrender.com/v1/chat/completions"
+  url: "https://openrouter.ai/api/v1/chat/completions"
   request:
     format: "openai_chat_completions"
-    model: "vulnbot-1.0"
-    max_tokens: 1024
+    model: "openai/gpt-5"
+    max_tokens: 512
   authentication:
-    required: false
-    scheme: null
+    required: true
+    scheme: "Bearer"
     header_name: "Authorization"
-    environment_variable: null
+    environment_variable: "OPENROUTER_API_KEY"
 
 llm:
   provider: "openai_compatible"
-  model: "gpt-5.6"
+  model: "gpt-4o"
   endpoint: "https://api.openai.com/v1/chat/completions"
   api_key_environment_variable: "SENTINEL_LLM_API_KEY"
   timeout: 30
@@ -46,4 +46,4 @@ attacks:
     - improper_output_handling
 
 reporting:
-  output_directory: "./reports/external"
+  output_directory: "./reports/openrouter"

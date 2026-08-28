@@ -252,4 +252,10 @@ class DefaultAttackAgent(AttackAgent):
                 "contents": [{"role": "user", "parts": [{"text": prompt}]}],
                 "generationConfig": {"maxOutputTokens": configuration.target_request.max_tokens},
             }
+        if configuration.target_request.format == "openai_chat_completions":
+            return {
+                "model": configuration.target_request.model or "vulnbot-1.0",
+                "messages": [{"role": "user", "content": prompt}],
+                "max_tokens": configuration.target_request.max_tokens,
+            }
         return {plan.parameter: prompt}
